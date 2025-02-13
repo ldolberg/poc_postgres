@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  metabasedb:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: usermb
+      POSTGRES_PASSWORD: passmb
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U usermb -d metabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db1:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: source_db1
+      POSTGRES_USER: user1
+      POSTGRES_PASSWORD: pass1
+    ports:
+      - "5431:5432"
+    volumes:
+      - ./init-db1:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user1 -d source_db1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db2:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: source_db2
+      POSTGRES_USER: user2
+      POSTGRES_PASSWORD: pass2
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-db2:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user2 -d source_db2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  analytics_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: analytics_db
+      POSTGRES_USER: analytics_user
+      POSTGRES_PASSWORD: analytics_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./init-analytics:/docker-entrypoint-initdb.d
+    depends_on:
+      db1:
+        condition: service_healthy
+      db2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_user -d analytics_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  metabase:
+    image: metabase/metabase:latest
+    ports:
+      - "3000:3000"
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabase
+      MB_DB_PORT: 5432
+      MB_DB_USER: usermb
+      MB_DB_PASS: passmb
+      MB_DB_HOST: metabasedb
+    depends_on:
+      metabasedb:
+        condition: service_healthy 
