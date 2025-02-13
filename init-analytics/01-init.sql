@@ -58,24 +58,71 @@ CREATE FOREIGN TABLE inventory_external (
 SERVER db2_server
 OPTIONS (schema_name 'public', table_name 'inventory');
 
--- Create analytics views
+-- Create enhanced analytics views
+
+-- Customer order summary with time-based metrics
 CREATE VIEW customer_orders_summary AS
 SELECT 
     c.customer_id,
     c.name,
     c.email,
     COUNT(o.order_id) as total_orders,
-    SUM(o.amount) as total_spent
+    SUM(o.amount) as total_spent,
+    AVG(o.amount) as avg_order_value,
+    MAX(o.order_date) as last_order_date,
+    MIN(o.order_date) as first_order_date,
+    COUNT(CASE WHEN o.order_date >= CURRENT_TIMESTAMP - INTERVAL '30 days' THEN 1 END) as orders_last_30_days,
+    SUM(CASE WHEN o.order_date >= CURRENT_TIMESTAMP - INTERVAL '30 days' THEN o.amount ELSE 0 END) as spent_last_30_days
 FROM customers_external c
 LEFT JOIN orders_external o ON c.customer_id = o.customer_id
 GROUP BY c.customer_id, c.name, c.email;
 
+-- Product inventory analysis
 CREATE VIEW product_inventory_summary AS
 SELECT 
     p.product_id,
     p.name,
     p.price,
     i.quantity,
-    (p.price * i.quantity) as inventory_value
+    (p.price * i.quantity) as inventory_value,
+    CASE 
+        WHEN i.quantity = 0 THEN 'Out of Stock'
+        WHEN i.quantity < 20 THEN 'Low Stock'
+        WHEN i.quantity < 50 THEN 'Medium Stock'
+        ELSE 'Good Stock'
+    END as stock_status,
+    i.last_updated as last_inventory_update,
+    p.created_at as product_added_date
 FROM products_external p
-JOIN inventory_external i ON p.product_id = i.product_id; 
+LEFT JOIN inventory_external i ON p.product_id = i.product_id;
+
+-- Daily sales analysis
+CREATE VIEW daily_sales_summary AS
+SELECT 
+    DATE_TRUNC('day', o.order_date) as sale_date,
+    COUNT(DISTINCT o.customer_id) as unique_customers,
+    COUNT(o.order_id) as total_orders,
+    SUM(o.amount) as total_sales,
+    AVG(o.amount) as avg_order_value
+FROM orders_external o
+GROUP BY DATE_TRUNC('day', o.order_date)
+ORDER BY sale_date DESC;
+
+-- Product performance analysis
+CREATE VIEW product_performance AS
+SELECT 
+    p.name as product_name,
+    p.price,
+    i.quantity as current_stock,
+    (p.price * i.quantity) as current_inventory_value,
+    CASE 
+        WHEN i.quantity = 0 THEN 'Urgent Reorder'
+        WHEN i.quantity < 20 THEN 'Reorder Soon'
+        WHEN i.quantity < 50 THEN 'Monitor Stock'
+        ELSE 'Stock Adequate'
+    END as inventory_status,
+    p.created_at as product_launch_date,
+    NOW() - p.created_at as product_age
+FROM products_external p
+LEFT JOIN inventory_external i ON p.product_id = i.product_id
+ORDER BY current_inventory_value DESC; 
