@@ -49,6 +49,7 @@ CONNECTION_STRING="host=$DB_HOST port=$DB_PORT dbname=$DB_NAME user=$DB_USER pas
 
 # Additional arguments
 EXTRA_ARGS=""
+SERVER_NAME="$DB_NAME"  # Default server name to DB_NAME
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -66,7 +67,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --server-name=*)
-            EXTRA_ARGS="$EXTRA_ARGS --server-name=${1#*=}"
+            SERVER_NAME="${1#*=}"  # Update server name if provided
             shift
             ;;
         *)
@@ -75,6 +76,9 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Add server name to extra args
+EXTRA_ARGS="$EXTRA_ARGS --server-name=$SERVER_NAME"
 
 # Run the Python script
 echo "Generating FDW DDL..."
